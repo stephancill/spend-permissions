@@ -13,8 +13,6 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
 
     function setUp() public {
         _initializeSpendPermissionManager();
-        vm.prank(owner);
-        account.addOwnerAddress(address(mockSpendPermissionManager));
 
         // establish an existing spend permission and capture the last valid updated period
         existingSpendPermission = _createSpendPermission();
@@ -38,7 +36,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -69,7 +67,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: newAccount,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -102,12 +100,12 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         vm.assume(start < end);
         vm.assume(period > 0);
         vm.assume(allowance > 0);
-        vm.deal(address(account), 1 ether);
+        deal(TOKEN, address(account), 1 ether);
 
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -151,12 +149,12 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         vm.assume(period > 0);
         vm.assume(period <= (end - start) / 2);
         vm.assume(allowance > 0);
-        vm.deal(address(account), 1 ether);
+        deal(TOKEN, address(account), 1 ether);
 
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -206,12 +204,12 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         vm.assume(period > 0);
         vm.assume(period <= (end - start) / 4);
         vm.assume(allowance > 0);
-        vm.deal(address(account), 1 ether);
+        deal(TOKEN, address(account), 1 ether);
 
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -264,7 +262,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -300,7 +298,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -337,7 +335,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -349,8 +347,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         mockSpendPermissionManager.revoke(newSpendPermission); // preemptively revoke the new spend permission
         vm.expectEmit(address(mockSpendPermissionManager));
         emit SpendPermissionManager.SpendPermissionRevoked({
-            hash: mockSpendPermissionManager.getHash(existingSpendPermission),
-            spendPermission: existingSpendPermission
+            hash: mockSpendPermissionManager.getHash(existingSpendPermission), spendPermission: existingSpendPermission
         });
         vm.recordLogs();
         bool isApproved = mockSpendPermissionManager.approveWithRevoke(
@@ -383,7 +380,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -394,13 +391,11 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         vm.startPrank(address(account));
         vm.expectEmit(address(mockSpendPermissionManager));
         emit SpendPermissionManager.SpendPermissionRevoked({
-            hash: mockSpendPermissionManager.getHash(existingSpendPermission),
-            spendPermission: existingSpendPermission
+            hash: mockSpendPermissionManager.getHash(existingSpendPermission), spendPermission: existingSpendPermission
         });
         vm.expectEmit(address(mockSpendPermissionManager));
         emit SpendPermissionManager.SpendPermissionApproved({
-            hash: mockSpendPermissionManager.getHash(newSpendPermission),
-            spendPermission: newSpendPermission
+            hash: mockSpendPermissionManager.getHash(newSpendPermission), spendPermission: newSpendPermission
         });
         mockSpendPermissionManager.approveWithRevoke(
             newSpendPermission, existingSpendPermission, lastValidUpdatedPeriod
@@ -427,7 +422,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -461,7 +456,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         vm.assume(period > 0);
         vm.assume(allowance > 0);
 
-        vm.deal(address(account), 1 ether);
+        deal(TOKEN, address(account), 1 ether);
         vm.prank(existingSpendPermission.spender);
         mockSpendPermissionManager.spend(existingSpendPermission, 1 wei);
 
@@ -470,7 +465,7 @@ contract ApproveWithRevokeTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory newSpendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,

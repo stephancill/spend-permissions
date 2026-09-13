@@ -28,7 +28,7 @@ contract IsApprovedTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -60,7 +60,7 @@ contract IsApprovedTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,

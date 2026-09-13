@@ -1,630 +1,243 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.28;
 
-import {MockERC20MissingReturn} from "../../mocks/MockERC20MissingReturn.sol";
-
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Errors} from "@openzeppelin/contracts/utils/Errors.sol";
-import {ERC20} from "solady/../src/tokens/ERC20.sol";
-import {MockERC20} from "solady/../test/utils/mocks/MockERC20.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MockERC20LikeUSDT} from "solady/../test/utils/mocks/MockERC20LikeUSDT.sol";
-import {ReturnsFalseToken} from "solady/../test/utils/weird-tokens/ReturnsFalseToken.sol";
+import {ERC20} from "solady/tokens/ERC20.sol";
 
 import {SpendPermissionManager} from "../../../src/SpendPermissionManager.sol";
-
 import {SpendPermissionManagerBase} from "../../base/SpendPermissionManagerBase.sol";
-import {MockMaliciousCoinbaseSmartWallet} from "../../mocks/MockMaliciousCoinbaseSmartWallet.sol";
+import {MockERC20MissingReturn} from "../../mocks/MockERC20MissingReturn.sol";
+import {MockFeeToken} from "../../mocks/MockFeeToken.sol";
+import {MockReentrantToken} from "../../mocks/MockReentrantToken.sol";
 
 contract SpendTest is SpendPermissionManagerBase {
-    MockERC20 mockERC20 = new MockERC20("mockERC20", "TEST", 18);
-    ReturnsFalseToken mockERC20ReturnsFalse = new ReturnsFalseToken();
-    MockERC20MissingReturn mockERC20MissingReturn = new MockERC20MissingReturn("mockERC20MissingReturn", "TEST", 18);
-    MockERC20LikeUSDT mockERC20LikeUSDT = new MockERC20LikeUSDT();
-    MockMaliciousCoinbaseSmartWallet mockMaliciousCoinbaseSmartWallet = new MockMaliciousCoinbaseSmartWallet();
+    SpendPermissionManager.SpendPermission private _permission;
 
     function setUp() public {
         _initializeSpendPermissionManager();
-        vm.startPrank(owner);
-        account.addOwnerAddress(address(mockSpendPermissionManager));
-
-        bytes[] memory owners = new bytes[](1);
-        owners[0] = abi.encode(owner);
-        mockMaliciousCoinbaseSmartWallet.initialize(owners);
-        mockMaliciousCoinbaseSmartWallet.addOwnerAddress(address(mockSpendPermissionManager));
-        vm.stopPrank();
-    }
-
-    function test_spend_reverts_maliciousUserWalletDoesNotSendETH(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(mockMaliciousCoinbaseSmartWallet)); // otherwise balance checks can fail
-        assumePayable(spender);
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(mockMaliciousCoinbaseSmartWallet),
-            spender: spender,
-            token: NATIVE_TOKEN,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        vm.deal(address(mockMaliciousCoinbaseSmartWallet), allowance);
-        vm.deal(spender, 0);
-        vm.prank(address(mockMaliciousCoinbaseSmartWallet));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
-
-        SpendPermissionManager.PeriodSpend memory originalUsage =
-            mockSpendPermissionManager.getLastUpdatedPeriod(spendPermission);
-        assertEq(address(mockMaliciousCoinbaseSmartWallet).balance, allowance);
-        assertEq(spender.balance, 0);
-        assertEq(address(mockSpendPermissionManager).balance, 0); // assure SPM has no balance before pulling from user
-        vm.startPrank(spender);
-        vm.expectRevert(bytes4(0xb12d13eb)); // "ETHTransferFailed()" encoded to match the error signature in Solday
-            // SafeTransferLib
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        assertEq(address(mockMaliciousCoinbaseSmartWallet).balance, allowance); // original balances still there
-        assertEq(spender.balance, 0); // original balances still there
-        assertEq(address(mockSpendPermissionManager).balance, 0);
-        SpendPermissionManager.PeriodSpend memory usage =
-            mockSpendPermissionManager.getLastUpdatedPeriod(spendPermission); // no change
-        assertEq(usage.start, originalUsage.start);
-        assertEq(usage.end, originalUsage.end);
-        assertEq(usage.spend, originalUsage.spend);
-    }
-
-    function test_spend_revert_invalidSender(
-        address sender,
-        address account,
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(start > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(sender != spender);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: NATIVE_TOKEN,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
+        _permission = _createSpendPermission();
+        erc20.mint(account, 10 ether);
         vm.prank(account);
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.startPrank(sender);
-        vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.InvalidSender.selector, sender, spender));
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        vm.stopPrank();
+        mockSpendPermissionManager.approve(_permission);
     }
 
-    function test_spend_revert_zeroValue(
-        uint128 invalidPk,
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData
-    ) public {
-        vm.assume(invalidPk != 0);
-        vm.assume(spender != address(0));
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(allowance > 0);
-        uint160 spend = 0;
-
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: NATIVE_TOKEN,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-
-        vm.warp(start);
-        vm.startPrank(spender);
-        vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.ZeroValue.selector));
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        vm.stopPrank();
-    }
-
-    function test_spend_revert_unauthorizedSpendPermission(
-        uint128 invalidPk,
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(invalidPk != 0);
-        vm.assume(spender != address(0));
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: NATIVE_TOKEN,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-
-        vm.warp(start);
-        vm.startPrank(spender);
-        vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.UnauthorizedSpendPermission.selector));
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        vm.stopPrank();
-    }
-
-    function test_spend_reverts_undeployedToken(
-        address spender,
-        address token,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(token.code.length == 0); // token is not deployed
-        assumeNotPrecompile(token);
-        vm.assume(token != address(0));
-        vm.assume(token != NATIVE_TOKEN);
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: token,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        vm.prank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
-
-        vm.startPrank(spender);
-        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, token));
-        mockSpendPermissionManager.spend(spendPermission, spend);
-    }
-
-    function test_spend_success_ether(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        assumePayable(spender);
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: NATIVE_TOKEN,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        vm.deal(address(account), allowance);
-        assertEq(address(account).balance, allowance);
-        vm.deal(spender, 0);
-        assertEq(spender.balance, 0);
-
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
-
-        vm.warp(start);
-
-        vm.startPrank(spender);
-        mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
-        mockSpendPermissionManager.spend(spendPermission, spend);
-
-        assertEq(address(account).balance, allowance - spend);
-        assertEq(spender.balance, spend);
-        SpendPermissionManager.PeriodSpend memory usage = mockSpendPermissionManager.getCurrentPeriod(spendPermission);
-        assertEq(usage.start, start);
-        assertEq(usage.end, _safeAddUint48(start, period, end));
-        assertEq(usage.spend, spend);
-    }
-
-    function test_spend_success_ether_alreadyInitialized(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        assumePayable(spender);
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: NATIVE_TOKEN,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        vm.deal(address(account), allowance);
-        vm.deal(spender, 0);
-        vm.prank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
-
-        assertEq(address(account).balance, allowance);
-        assertEq(spender.balance, 0);
+    /// @notice A finite master allowance is consumed independently of the recurring budget.
+    /// @param value Requested spend, bounded to the period's allowance.
+    function test_spend_success_finiteAllowance(uint160 value) public {
+        value = uint160(bound(value, 1, _permission.allowance));
+        vm.prank(account);
+        erc20.approve(address(mockSpendPermissionManager), 2 ether);
         vm.prank(spender);
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        assertEq(address(account).balance, allowance - spend);
-        assertEq(spender.balance, spend);
-        SpendPermissionManager.PeriodSpend memory usage = mockSpendPermissionManager.getCurrentPeriod(spendPermission);
-        assertEq(usage.start, start);
-        assertEq(usage.end, _safeAddUint48(start, period, end));
-        assertEq(usage.spend, spend);
+        mockSpendPermissionManager.spend(_permission, value);
+        assertEq(erc20.balanceOf(account), 10 ether - value);
+        assertEq(erc20.balanceOf(spender), value);
+        assertEq(erc20.balanceOf(address(mockSpendPermissionManager)), 0);
+        assertEq(erc20.allowance(account, address(mockSpendPermissionManager)), 2 ether - value);
+        assertEq(mockSpendPermissionManager.getCurrentPeriod(_permission).spend, value);
     }
 
-    function test_spend_success_ERC20ReturnsTrue(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: address(mockERC20),
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        mockERC20.mint(address(account), allowance);
-        vm.prank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
+    /// @notice Only the spender named in the permission may initiate a transfer.
+    function test_spend_revert_wrongCaller() public {
+        vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.InvalidSender.selector, address(this), spender));
+        mockSpendPermissionManager.spend(_permission, 1);
+    }
 
-        assertEq(mockERC20.balanceOf(address(account)), allowance);
-        assertEq(mockERC20.balanceOf(spender), 0);
+    /// @notice Possession of the token allowance alone does not authorize a permission.
+    function test_spend_revert_unapprovedPermission() public {
+        _permission.salt = 1;
         vm.prank(spender);
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        assertEq(mockERC20.balanceOf(address(account)), allowance - spend);
-        assertEq(mockERC20.balanceOf(spender), spend);
-        SpendPermissionManager.PeriodSpend memory usage = mockSpendPermissionManager.getCurrentPeriod(spendPermission);
-        assertEq(usage.start, start);
-        assertEq(usage.end, _safeAddUint48(start, period, end));
-        assertEq(usage.spend, spend);
+        vm.expectRevert(SpendPermissionManager.UnauthorizedSpendPermission.selector);
+        mockSpendPermissionManager.spend(_permission, 1);
     }
 
-    function test_spend_success_ERC20LikeUSDT(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 totalSpend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(totalSpend > 1);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= totalSpend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: address(mockERC20LikeUSDT),
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        mockERC20LikeUSDT.mint(address(account), allowance);
-        vm.prank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
-        uint160 spend = totalSpend / 2; // allow two spends
-        assertEq(mockERC20LikeUSDT.balanceOf(address(account)), allowance);
-        assertEq(mockERC20LikeUSDT.balanceOf(spender), 0);
-        vm.startPrank(spender);
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        assertEq(mockERC20LikeUSDT.balanceOf(address(account)), allowance - spend);
-        assertEq(mockERC20LikeUSDT.balanceOf(spender), spend);
-        SpendPermissionManager.PeriodSpend memory usage = mockSpendPermissionManager.getCurrentPeriod(spendPermission);
-        assertEq(usage.start, start);
-        assertEq(usage.end, _safeAddUint48(start, period, end));
-        assertEq(usage.spend, spend);
-        // Second spend should succeed as well. This fails if the approval behavior in
-        // `SpendPermissionManager._transferFrom` ever tries to
-        // approve USDT allowance when the existing allowance is nonzero.
-        mockSpendPermissionManager.spend(spendPermission, spend);
-    }
-
-    function test_spend_success_ERC20NoReturn(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: address(mockERC20MissingReturn),
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        mockERC20MissingReturn.mint(address(account), allowance);
-        vm.prank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
-
-        assertEq(mockERC20MissingReturn.balanceOf(address(account)), allowance);
-        assertEq(mockERC20MissingReturn.balanceOf(spender), 0);
+    /// @notice Zero spends cannot trigger a token interaction.
+    function test_spend_revert_zeroValue() public {
         vm.prank(spender);
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        assertEq(mockERC20MissingReturn.balanceOf(address(account)), allowance - spend);
-        assertEq(mockERC20MissingReturn.balanceOf(spender), spend);
-        SpendPermissionManager.PeriodSpend memory usage = mockSpendPermissionManager.getCurrentPeriod(spendPermission);
-        assertEq(usage.start, start);
-        assertEq(usage.end, _safeAddUint48(start, period, end));
-        assertEq(usage.spend, spend);
+        vm.expectRevert(SpendPermissionManager.ZeroValue.selector);
+        mockSpendPermissionManager.spend(_permission, 0);
     }
 
-    function test_spend_reverts_ERC20FailedTransfer_ERC20Reverts(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: address(mockERC20),
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        vm.prank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
-
-        vm.startPrank(spender);
-        // account has no balance, so the transfer will fail
-        vm.expectRevert(abi.encodeWithSelector(ERC20.InsufficientBalance.selector));
-        mockSpendPermissionManager.spend(spendPermission, spend);
+    /// @notice An approved permission cannot exceed the available ERC-20 allowance.
+    function test_spend_revert_insufficientAllowanceRollsBack() public {
+        vm.prank(account);
+        erc20.approve(address(mockSpendPermissionManager), 1);
+        vm.prank(spender);
+        vm.expectRevert(ERC20.InsufficientAllowance.selector);
+        mockSpendPermissionManager.spend(_permission, 2);
+        assertEq(mockSpendPermissionManager.getLastUpdatedPeriod(_permission).spend, 0);
+        assertEq(erc20.balanceOf(account), 10 ether);
+        assertEq(erc20.allowance(account, address(mockSpendPermissionManager)), 1);
     }
 
-    function test_spend_reverts_ERC20FailedTransfer_ERC20ReturnsFalse(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: address(mockERC20ReturnsFalse),
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        vm.prank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        vm.warp(start);
+    /// @notice Failed token transfers preserve prior period usage and balances.
+    function test_spend_revert_insufficientBalanceRollsBack() public {
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(_permission, 1);
+        erc20.burn(account, erc20.balanceOf(account));
+        vm.prank(spender);
+        vm.expectRevert(ERC20.InsufficientBalance.selector);
+        mockSpendPermissionManager.spend(_permission, 2);
+        assertEq(mockSpendPermissionManager.getLastUpdatedPeriod(_permission).spend, 1);
+        assertEq(erc20.balanceOf(spender), 1);
+    }
 
-        vm.startPrank(spender);
+    /// @notice Restoring token approval resumes a permission without resetting its period usage.
+    function test_spend_success_allowanceRemovalAndRestoration() public {
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(_permission, 0.4 ether);
+        vm.prank(account);
+        erc20.approve(address(mockSpendPermissionManager), 0);
+        vm.prank(spender);
+        vm.expectRevert(ERC20.InsufficientAllowance.selector);
+        mockSpendPermissionManager.spend(_permission, 1);
+        assertTrue(mockSpendPermissionManager.isValid(_permission));
+        vm.prank(account);
+        erc20.approve(address(mockSpendPermissionManager), 1 ether);
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(_permission, 0.6 ether);
+        vm.prank(spender);
         vm.expectRevert(
-            abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(mockERC20ReturnsFalse))
+            abi.encodeWithSelector(SpendPermissionManager.ExceededSpendPermission.selector, 1 ether + 1, 1 ether)
         );
-        mockSpendPermissionManager.spend(spendPermission, spend);
+        mockSpendPermissionManager.spend(_permission, 1);
     }
 
-    function test_spend_success_ERC20_approvalSetToZero(
-        address spender,
-        uint48 start,
-        uint48 end,
-        uint48 period,
-        uint160 allowance,
-        uint256 salt,
-        bytes memory extraData,
-        uint160 spend
-    ) public {
-        vm.assume(spender != address(0));
-        vm.assume(spender != address(account)); // otherwise balance checks can fail
-        vm.assume(start > 0);
-        vm.assume(end > 0);
-        vm.assume(start < end);
-        vm.assume(period > 0);
-        vm.assume(spend > 0);
-        vm.assume(allowance > 0);
-        vm.assume(allowance >= spend);
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: address(account),
-            spender: spender,
-            token: address(mockERC20),
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        mockERC20.mint(address(account), allowance);
-        vm.startPrank(address(account));
-        mockSpendPermissionManager.approve(spendPermission);
-        mockERC20.approve(address(mockSpendPermissionManager), 0);
-        vm.stopPrank();
-        vm.warp(start);
-
-        assertEq(mockERC20.balanceOf(address(account)), allowance);
-        assertEq(mockERC20.balanceOf(spender), 0);
-        assertEq(mockERC20.allowance(address(account), address(mockSpendPermissionManager)), 0);
+    /// @notice Period resets do not replenish the token's finite master allowance.
+    function test_spend_success_newPeriodSameTokenAllowance() public {
+        vm.prank(account);
+        erc20.approve(address(mockSpendPermissionManager), 1.5 ether);
         vm.prank(spender);
-        mockSpendPermissionManager.spend(spendPermission, spend);
-        assertEq(mockERC20.balanceOf(address(account)), allowance - spend);
-        assertEq(mockERC20.balanceOf(spender), spend);
-        assertEq(mockERC20.allowance(address(account), address(mockSpendPermissionManager)), 0);
-        SpendPermissionManager.PeriodSpend memory usage = mockSpendPermissionManager.getCurrentPeriod(spendPermission);
-        assertEq(usage.start, start);
-        assertEq(usage.end, _safeAddUint48(start, period, end));
-        assertEq(usage.spend, spend);
+        mockSpendPermissionManager.spend(_permission, 1 ether);
+        vm.warp(uint256(_permission.start) + _permission.period);
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(_permission, 0.5 ether);
+        assertEq(mockSpendPermissionManager.getCurrentPeriod(_permission).spend, 0.5 ether);
+        assertEq(erc20.allowance(account, address(mockSpendPermissionManager)), 0);
+        vm.prank(spender);
+        vm.expectRevert(ERC20.InsufficientAllowance.selector);
+        mockSpendPermissionManager.spend(_permission, 1);
+    }
+
+    /// @notice Distinct permissions share token approval but have independent period budgets.
+    function test_spend_success_independentPermissions() public {
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(_permission, 1 ether);
+        SpendPermissionManager.SpendPermission memory second = _permission;
+        second.salt = 1;
+        vm.prank(account);
+        mockSpendPermissionManager.approve(second);
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(second, 1 ether);
+        assertEq(mockSpendPermissionManager.getCurrentPeriod(_permission).spend, 1 ether);
+        assertEq(mockSpendPermissionManager.getCurrentPeriod(second).spend, 1 ether);
+        assertEq(erc20.balanceOf(spender), 2 ether);
+    }
+
+    /// @notice USDT-style tokens work with residual allowances across multiple spends.
+    function test_spend_success_usdtResidualAllowance() public {
+        MockERC20LikeUSDT token = new MockERC20LikeUSDT();
+        token.mint(account, 100);
+        _permission.token = address(token);
+        vm.startPrank(account);
+        token.approve(address(mockSpendPermissionManager), 100);
+        mockSpendPermissionManager.approve(_permission);
+        vm.stopPrank();
+        vm.startPrank(spender);
+        mockSpendPermissionManager.spend(_permission, 30);
+        mockSpendPermissionManager.spend(_permission, 20);
+        vm.stopPrank();
+        assertEq(token.balanceOf(spender), 50);
+        assertEq(token.allowance(account, address(mockSpendPermissionManager)), 50);
+    }
+
+    /// @notice SafeERC20 handles ERC-20s whose transfers return no data.
+    function test_spend_success_noReturnValue() public {
+        MockERC20MissingReturn token = new MockERC20MissingReturn("No Return", "NONE", 18);
+        token.mint(account, 100);
+        _permission.token = address(token);
+        vm.startPrank(account);
+        token.approve(address(mockSpendPermissionManager), 100);
+        mockSpendPermissionManager.approve(_permission);
+        vm.stopPrank();
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(_permission, 60);
+        assertEq(token.balanceOf(spender), 60);
+        assertEq(token.allowance(account, address(mockSpendPermissionManager)), 40);
+    }
+
+    /// @notice A false token return is a failed transfer, with usage rolled back.
+    function test_spend_revert_falseReturnValue() public {
+        vm.mockCall(TOKEN, abi.encodeCall(IERC20.transferFrom, (account, spender, 1)), abi.encode(false));
+        vm.prank(spender);
+        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, TOKEN));
+        mockSpendPermissionManager.spend(_permission, 1);
+        assertEq(mockSpendPermissionManager.getLastUpdatedPeriod(_permission).spend, 0);
+    }
+
+    /// @notice An address without token code cannot falsely report a successful transfer.
+    function test_spend_revert_undeployedToken() public {
+        _permission.token = makeAddr("undeployed token");
+        vm.prank(account);
+        mockSpendPermissionManager.approve(_permission);
+        vm.prank(spender);
+        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, _permission.token));
+        mockSpendPermissionManager.spend(_permission, 1);
+        assertEq(mockSpendPermissionManager.getLastUpdatedPeriod(_permission).spend, 0);
+    }
+
+    /// @notice Fee-on-transfer tokens are metered by the requested amount and transferred in one hop.
+    function test_spend_success_feeOnTransfer() public {
+        MockFeeToken token = new MockFeeToken();
+        token.mint(account, 100);
+        _permission.token = address(token);
+        vm.startPrank(account);
+        token.approve(address(mockSpendPermissionManager), 100);
+        mockSpendPermissionManager.approve(_permission);
+        vm.stopPrank();
+        vm.prank(spender);
+        mockSpendPermissionManager.spend(_permission, 100);
+        assertEq(token.balanceOf(account), 0);
+        assertEq(token.balanceOf(spender), 99);
+        assertEq(token.balanceOf(address(mockSpendPermissionManager)), 0);
+        assertEq(mockSpendPermissionManager.getCurrentPeriod(_permission).spend, 100);
+    }
+
+    /// @notice A token callback sees the outer spend recorded and cannot exceed the budget by reentering.
+    function test_spend_revert_reentrantOverspend() public {
+        MockReentrantToken token = new MockReentrantToken(mockSpendPermissionManager);
+        token.mint(account, 100);
+        _permission.token = address(token);
+        _permission.spender = address(token);
+        _permission.allowance = 100;
+        vm.startPrank(account);
+        token.approve(address(mockSpendPermissionManager), 100);
+        mockSpendPermissionManager.approve(_permission);
+        vm.stopPrank();
+        token.spend({permission: _permission, value: 60, reentrantValue: 41});
+        assertFalse(token.reentrySucceeded());
+        assertEq(
+            token.reentryError(),
+            abi.encodeWithSelector(SpendPermissionManager.ExceededSpendPermission.selector, 101, 100)
+        );
+        assertEq(token.balanceOf(account), 40);
+        assertEq(token.balanceOf(address(token)), 60);
+        assertEq(mockSpendPermissionManager.getCurrentPeriod(_permission).spend, 60);
+    }
+
+    /// @notice Native token sentinels are rejected at approval.
+    function test_approve_revert_nativeToken() public {
+        _permission.token = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+        vm.prank(account);
+        vm.expectRevert(SpendPermissionManager.NativeTokenNotSupported.selector);
+        mockSpendPermissionManager.approve(_permission);
+    }
+
+    /// @notice Native ETH cannot be sent to the manager through a payable entry point.
+    function test_receive_revert_nativeETH() public {
+        vm.deal(address(this), 1 ether);
+        (bool success,) = address(mockSpendPermissionManager).call{value: 1}("");
+        assertFalse(success);
     }
 }

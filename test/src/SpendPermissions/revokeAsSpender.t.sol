@@ -23,7 +23,7 @@ contract RevokeAsSpenderTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start < end);
         vm.assume(period > 0);
@@ -64,7 +64,7 @@ contract RevokeAsSpenderTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start < end);
         vm.assume(period > 0);
@@ -101,7 +101,7 @@ contract RevokeAsSpenderTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start < end);
         vm.assume(period > 0);
@@ -124,8 +124,7 @@ contract RevokeAsSpenderTest is SpendPermissionManagerBase {
         vm.startPrank(spender);
         vm.expectEmit(address(mockSpendPermissionManager));
         emit SpendPermissionManager.SpendPermissionRevoked({
-            hash: mockSpendPermissionManager.getHash(spendPermission),
-            spendPermission: spendPermission
+            hash: mockSpendPermissionManager.getHash(spendPermission), spendPermission: spendPermission
         });
         mockSpendPermissionManager.revokeAsSpender(spendPermission);
     }

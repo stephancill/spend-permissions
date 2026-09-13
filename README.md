@@ -1,158 +1,112 @@
-# Spend Permissions
+# Allowance Spend Permissions
 
-**Spend Permissions enable apps to spend native and ERC-20 tokens on behalf of users.**
+Recurring ERC-20 spending permissions for **EOAs and ERC-1271 wallets**, funded by ordinary token allowances.
 
-## Deployments
+Forked from [Coinbase Spend Permissions](https://github.com/coinbase/spend-permissions) at [`e0004e6`](https://github.com/coinbase/spend-permissions/tree/e0004e63edc4e17de7aa978293800ac7a16892e5).
 
-### SpendPermissionManager
+## How it works
 
-`SpendPermissionManager`: `0xf85210B21cC50302F477BA56686d2019dC9b67Ad`
+1. The account calls `token.approve(manager, amount)` on each ERC-20 it wants to make available. A finite allowance works; unlimited approval is optional.
+2. The account signs an EIP-712 permission naming a spender, token, per-period allowance, start/end times, and salt.
+3. The spender calls `spendWithSignature(permission, value, signature)` to register the permission and spend atomically.
+4. Subsequent calls to `spend(permission, value)` use the registered permission. Only the named spender can make either spending call.
+5. The manager records usage and calls `token.transferFrom(account, spender, value)` through OpenZeppelin `SafeERC20`. Tokens travel directly from account to spender.
 
-`PublicERC6492Validator`: `0xcfCE48B757601F3f351CB6f434CB0517aEEE293D`
+The ERC-20 allowance is shared across permissions for that account/token/manager. Each permission has its own recurring budget. A spend must fit both allowances and the account's balance.
 
-Testnets:
+## Permission format
 
-- Base Sepolia
-- Optimism Sepolia
-- Ethereum Sepolia
-
-Mainnets:
-
-- Base
-- Ethereum
-- Optimism
-- Arbitrum
-- Polygon
-- Zora
-- Binance Smart Chain
-- Avalanche
-
-### SpendRouter
-
-`SpendRouter`: TBD
-
-## Design Overview
-
-### 1. Periphery addition to Coinbase Smart Wallet V1
-
-While implementing this feature as a new V2 wallet implementation was tempting, we decided to leverage the modular owner system from [Smart Wallet V1](https://github.com/coinbase/smart-wallet) and avoid a hard upgrade. The `SpendPermissionManager` singleton is added as an owner of the user's smart wallet, giving it the ability to move user funds on behalf of a sender within the tight constraints of the spend permission logic.
-
-### 2. Only Native and ERC-20 token support
-
-Spend Permissions only supports spending Native (e.g. ETH) and ERC-20 (e.g. USDC) tokens on a recurring period. This enables use cases like subscriptions out of the box (e.g 10 USDC per month) and also can support apps that want to avoid asking users for spend permissions every session.
-
-This approach does **not** enable apps to make arbitrary external calls from user accounts, improving security by having a tighter and fully-known scope of account control.
-
-### 3. Spender-originated calls
-
-Spend Permissions allow users to delegate token spending to a `spender` address, presumably controlled by the app. When an app wants to spend user tokens, it calls into `SpendPermissionManager` from this `spender` address. `SpendPermissionManager` will then validate the spend is within the approved permission's allowance and calls into the user's account to transfer tokens.
-
-This approach does **not** use the ERC-4337 EntryPoint to prompt external calls from user accounts, improving security by avoiding the possibility of ERC-4337 Paymasters spending users' tokens on gas fees.
-
-## End-to-end Journey
-
-### 1. App requests and user signs permissions (offchain)
-
-Apps request spend permissions for users to sign by sending an `eth_signTypedData` RPC request containing the permission details.
-
-Read more details [here](./docs/diagrams/signSpendPermission.md).
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant A as App
-    participant WF as Wallet Frontend
-    participant U as User
-    participant WB as Wallet Backend
-
-    A->>WF: eth_signTypedData
-    WF->>U: approve permission
-    U-->>WF: signature
-    WF->>WB: get account status
-    WB-->>WF: deploy status, initCode, current + pending owners
-    alt  account not deployed && manager in initCode
-        Note right of WF: wrap signature in ERC-6492
-    else manager not in initCode && manager not owner
-        WF->>U: add manager
-        U-->>WF: signature
-    end
-    WF-->>A: signature
+```solidity
+struct SpendPermission {
+    address account;
+    address spender;
+    address token;
+    uint160 allowance;
+    uint48 period;
+    uint48 start;
+    uint48 end;
+    uint256 salt;
+    bytes extraData;
+}
 ```
 
-### 2. App approves and spends (onchain)
+Amounts are in the token's smallest units. Times are Unix seconds. `start` is inclusive and `end` is exclusive. Periods are fixed intervals anchored to `start`, not rolling windows or calendar months; unused allowance does not carry over.
 
-Spenders (apps) spend tokens by calling `SpendPermissionManager.spend` with their spend permission values, a recipient, and an amount of tokens to spend.
+`salt` differentiates permissions. Changing any field creates an independent permission, rather than updating an existing one. `extraData` is signed metadata; the manager does not interpret it or use it to choose a recipient.
 
-Spenders may want to batch this call with an additionally prepended call to [approve their permission via user signature](./approveWithSignature.md) unless the user has already approved the spend permission(s) directly via `SpendPermissionManager.approve`.
+### Signatures
 
-Read more details [here](./docs/diagrams/spend.md).
+The EIP-712 domain is:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant S as Spender
-    participant PM as Permission Manager
-    participant A as Account
-    participant ERC20
-
-    alt
-    S->>PM: approveWithSignature
-    Note over PM: validate signature and store approval
-    else
-    A->>PM: approve
-    end
-    S->>PM: spend
-    Note over PM: validate permission approved <br> and spend value within allowance
-    PM->>A: execute
-    Note over PM,A: transfer tokens
-    alt token is ERC-7528 address
-        A->>S: call{value}()
-        Note over A,S: transfer native token to spender
-    else else is ERC-20 contract
-        A->>ERC20: transfer(spender, value)
-        Note over A,ERC20: transfer ERC-20 to spender
-    end
+```text
+name:              Allowance Spend Permission Manager
+version:           1
+chainId:           target chain ID
+verifyingContract: deployed manager address
 ```
 
-### 3. User revokes permission (onchain)
+OpenZeppelin `SignatureChecker` validates ordinary EOA signatures and deployed wallets' ERC-1271 signatures. Accounts with code, including EIP-7702 delegations, use ERC-1271 validation. ERC-6492 deployment wrappers are not supported.
 
-Users can revoke permissions at any time by calling `SpendPermissionManager.revoke`, which can also be batched via `CoinbaseSmartWallet.executeBatch`.
+EOAs sign this typed data directly. Contract wallets supply the signature their ERC-1271 implementation expects for the same digest. The signature authorizes a reusable permission, not one particular payment. Replaying it cannot reset usage or undo revocation.
 
-Read more details [here](./docs/diagrams/revoke.md).
+## API
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant E as Entrypoint
-    participant A as Account
-    participant PM as Permission Manager
+| Function | Purpose |
+| --- | --- |
+| `approve(permission)` | Account directly registers a permission |
+| `approveWithSignature(permission, signature)` | Anyone registers an EOA or ERC-1271 signed permission |
+| `approveBatchWithSignature(batch, signature)` | Registers a batch sharing account, period, start, and end |
+| `spend(permission, value)` | Named spender uses an approved permission |
+| `spendWithSignature(permission, value, signature)` | Named spender registers and spends atomically |
+| `revoke(permission)` | Account permanently revokes a permission hash |
+| `revokeAsSpender(permission)` | Named spender permanently revokes its permission |
+| `approveWithRevoke(new, old, expectedLastUpdatedPeriod)` | Account replaces a permission if the old usage still matches |
+| `getHash` / `getBatchHash` | EIP-712 digests for signatures and indexing |
+| `getCurrentPeriod` / `getLastUpdatedPeriod` | Current or last recorded usage |
+| `isApproved` / `isRevoked` / `isValid` | Stored authorization status |
 
-    Note over E: Validation phase
-    E->>A: validateUserOp
-    A-->>E: validation data
-    Note over E: Execution phase
-    E->>A: executeBatch
-    loop
-        A->>PM: revoke
-        Note over A,PM: SpendPermission data
-    end
+Approval functions return `false` for previously revoked permissions. Batch approval may approve valid entries while returning `false` if another entry is revoked; malformed entries revert the whole batch. Duplicate entries are idempotent.
+
+`isValid` checks approval and revocation only. It does not check time bounds, remaining period budget, token allowance, or balance. `SpendPermissionUsed` reports the incremental requested amount; the period getters report cumulative usage. Discover permissions through approval/revocation events; the contract does not enumerate them.
+
+## Revocation and token behavior
+
+- `revoke` can cancel a signed permission before it has been submitted. Its hash stays revoked permanently.
+- Setting a token's allowance to zero stops transfers but does not revoke permissions. Restoring allowance makes still-valid permissions usable again, with their existing period usage.
+- ERC-1271 signature-policy changes do not revoke already-registered permissions. Use the manager's revocation API or remove the token allowance.
+- Revocation takes effect when executed; an authorized spender can still use its available budget before the revocation transaction executes.
+- Standard ERC-20s, including WETH, work without a token registry or EIP-2612 support. `SafeERC20` accommodates no-return tokens and rejects failed transfers and targets without code. USDT-style approvals may require the account to approve zero before increasing an existing token allowance.
+- Limits count the **requested transfer amount**. Fee-on-transfer tokens may deliver less, sender-fee tokens may debit more, and rebasing/share-based tokens may round. A successful call is not an exact-receipt guarantee for such tokens.
+- Native-token sentinels and tokens advertising the ERC-721 interface are rejected. ERC-165 checks cannot identify every nonstandard NFT contract.
+
+## Develop and verify
+
+Install Foundry v1.7.1 and Bun v1.3.14, then:
+
+```sh
+git submodule update --init
+bun install --frozen-lockfile
+forge fmt --check
+forge build --sizes
+FOUNDRY_PROFILE=ci forge test -vv
+bun run lint
+bun run format:check
+bun run typecheck
+bun run example
 ```
 
-## Security
+`bun run example` starts a disposable Anvil node on an available localhost port, deploys the manager and a mock ERC-20, and checks typed-data hashing, finite approval, signing, spending limits, period reset, and revocation. It shuts down its node afterward. Run `forge build` first to generate artifacts.
 
-Audited by [Spearbit](https://spearbit.com/) via [Cantina](https://cantina.xyz/).
+Reusable typed-data builders, input schemas, and an ABI are in [`examples/permissions.ts`](examples/permissions.ts); the complete flow is in [`examples/local.ts`](examples/local.ts). The helpers work with viem EOA clients or wallet-specific ERC-1271 signing flows.
 
-### SpendPermissionManager
+## Deployment and upstream compatibility
 
-| Audit | Date | Report |
-|--------|---------|---------|
-| Private audit 1 | 10/29/2024 | [Report](audits/Cantina-October-2024.pdf) |
-| Public competition | 11/2024 | [Report](audits/Cantina-November-2024.pdf) |
-| Private audit 2 | 12/10/2024 | [Report](audits/Cantina-December-2024.pdf) |
+The sole production contract is [`src/SpendPermissionManager.sol`](src/SpendPermissionManager.sol). It has no constructor arguments, owner, proxy, or external validator deployment. No public deployment addresses are published yet. Use the `deploy` Foundry profile to build production verification artifacts.
 
-### SpendRouter
+This fork changes the execution model and EIP-712 domain. Coinbase's existing token approvals, signatures, deployment addresses, smart-wallet ownership setup, MagicSpend flows, and router are not compatible with it.
 
-| Audit | Date | Report |
-|--------|---------|---------|
-| Private audit 1 | 03/18/2026 | [Report](audits/Cantina-March-2026-SpendRouter.pdf) |
-| Private audit 2 | 03/21/2026 | [Report](audits/Cantina-March-2026-SpendRouter-2.pdf) |
+The upstream [audit reports](audits/) are retained as historical references; they do not audit this fork. See [accounting](docs/SpendPermissionAccounting.md), [workflows](docs/workflows.md), and [implementation notes](docs/implementation-notes.md) for details.
+
+## License
+
+[MIT](LICENSE.md), preserving Coinbase's copyright and attribution.

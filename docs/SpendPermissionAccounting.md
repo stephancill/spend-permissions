@@ -8,7 +8,7 @@ A spend permission contains 3 entity values:
 
 1. `account`: user whose tokens will be spent
 1. `spender`: app who is able to spend tokens
-1. `token`: ERC-20 contract or ERC-7528 native token
+1. `token`: ERC-20 contract
 
 A spend permission contains 4 accounting values:
 
@@ -23,7 +23,7 @@ Spend permissions allow an app to request to spend user assets on a recurring ba
 
 This design allows users and apps to have reduced friction in approving asset use, while still giving the user control to manage risk and keep asset allowance small upfront. This design is also intuitive for users and can easily support recurring models like subscriptions, automated trading strategies, and payroll.
 
-The start time and period period set a deterministic schedule infinitely into the future for when allowances reset to zero for the next period. The end time enforces when the permission can no longer be used and does not have to correlate with a clean period boundary.
+The start time and period set a deterministic schedule for when allowance usage resets to zero. The end time enforces when the permission can no longer be used and does not have to correlate with a clean period boundary.
 Consider this example configuration:
 
 ```
@@ -66,3 +66,15 @@ period = [100, 199]
 allowance = 0 + 25 = 25
 overspend = 25 > 100 = false
 ```
+
+## ERC-20 allowance and transfer accounting
+
+The account separately approves the manager on the ERC-20. This token allowance is shared across all permissions for the account/token/manager and does not reset with the recurring period. For a standard token, each spend is limited by the current period's remaining budget, the remaining token allowance, and the account's balance.
+
+Usage counts the requested `transferFrom` amount in raw token units. It does not measure balance differences. Token-specific transfer fees, rebases, and rounding can change actual debits or receipts. No token decimals or price oracle is consulted by the manager.
+
+Usage is updated before the external token call. A revert or false token return rolls back that update and any approval made by `spendWithSignature`. The manager transfers directly from account to spender and never needs to hold tokens between calls.
+
+Unused budget does not accumulate. The full allowance can be used immediately before a period boundary and again immediately after it. Separate permission hashes have separate budgets, even if the token and spender are the same. Repeated approvals of the same hash do not reset usage.
+
+`SpendPermissionUsed.periodSpend.spend` is the incremental spend in that event. `getCurrentPeriod` and `getLastUpdatedPeriod` return cumulative period usage. `isValid` only checks approved/not-revoked status.

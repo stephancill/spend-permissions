@@ -36,7 +36,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -69,7 +69,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -123,7 +123,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         uint256 salt,
         bytes memory extraData
     ) public {
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start < end);
         vm.assume(allowance > 0);
@@ -160,7 +160,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: 0,
@@ -190,7 +190,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -222,7 +222,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -253,7 +253,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -264,8 +264,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         vm.startPrank(account);
         vm.expectEmit(address(mockSpendPermissionManager));
         emit SpendPermissionManager.SpendPermissionApproved({
-            hash: mockSpendPermissionManager.getHash(spendPermission),
-            spendPermission: spendPermission
+            hash: mockSpendPermissionManager.getHash(spendPermission), spendPermission: spendPermission
         });
         mockSpendPermissionManager.approve(spendPermission);
     }
@@ -288,7 +287,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -320,7 +319,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -356,7 +355,7 @@ contract ApproveTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,

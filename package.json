@@ -1,0 +1,23 @@
+{
+  "name": "allowance-spend-permissions",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "oxlint examples",
+    "format": "oxfmt examples package.json tsconfig.json",
+    "format:check": "oxfmt --check examples package.json tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "example": "bun examples/local.ts"
+  },
+  "dependencies": {
+    "viem": "^2.56.3",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "oxfmt": "^0.67.0",
+    "oxlint": "^1.82.0",
+    "typescript": "^7.0.2"
+  },
+  "packageManager": "bun@1.3.14"
+}

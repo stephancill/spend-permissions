@@ -62,7 +62,7 @@ contract GetCurrentPeriodTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -100,7 +100,7 @@ contract GetCurrentPeriodTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -143,7 +143,7 @@ contract GetCurrentPeriodTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -188,7 +188,7 @@ contract GetCurrentPeriodTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -228,7 +228,7 @@ contract GetCurrentPeriodTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -261,7 +261,7 @@ contract GetCurrentPeriodTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,

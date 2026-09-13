@@ -10,8 +10,6 @@ import {Vm} from "forge-std/Test.sol";
 contract ApproveWithSignatureTest is SpendPermissionManagerBase {
     function setUp() public {
         _initializeSpendPermissionManager();
-        vm.prank(owner);
-        account.addOwnerAddress(address(mockSpendPermissionManager));
     }
 
     function test_approveWithSignature_revert_invalidSignature(
@@ -26,7 +24,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(invalidPk != 0);
 
@@ -42,7 +40,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             extraData: extraData
         });
 
-        bytes memory invalidSignature = _signSpendPermission(spendPermission, invalidPk, 0);
+        bytes memory invalidSignature = _signSpendPermission({spendPermission: spendPermission, signerPk: invalidPk});
         vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.InvalidSignature.selector));
         mockSpendPermissionManager.approveWithSignature(spendPermission, invalidSignature);
     }
@@ -65,7 +63,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -74,7 +72,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             extraData: extraData
         });
 
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
         vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.InvalidStartEnd.selector, start, end));
         mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
     }
@@ -93,7 +91,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: 0,
@@ -102,7 +100,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             extraData: extraData
         });
 
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
         vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.ZeroPeriod.selector));
         mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
     }
@@ -122,7 +120,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -131,7 +129,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             extraData: extraData
         });
 
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
         vm.expectRevert(abi.encodeWithSelector(SpendPermissionManager.ZeroAllowance.selector));
         mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
     }
@@ -147,7 +145,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start < end);
         vm.assume(period > 0);
@@ -165,7 +163,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             extraData: extraData
         });
 
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
         mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
         vm.assertTrue(mockSpendPermissionManager.isValid(spendPermission));
     }
@@ -180,7 +178,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         uint256 salt,
         bytes memory extraData
     ) public {
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(spender != address(0));
         vm.assume(token != address(0));
         vm.assume(start < end);
@@ -199,7 +197,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             extraData: extraData
         });
 
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
         bool isApproved = mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
         vm.assertTrue(isApproved);
         vm.assertTrue(mockSpendPermissionManager.isValid(spendPermission));
@@ -216,7 +214,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start < end);
         vm.assume(period > 0);
@@ -236,7 +234,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
 
         vm.prank(address(account));
         mockSpendPermissionManager.revoke(spendPermission);
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
         vm.recordLogs();
         bool isApproved = mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -245,7 +243,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         vm.assertFalse(mockSpendPermissionManager.isValid(spendPermission));
     }
 
-    function test_approveWithSignature_success_erc6492SignaturePreDeploy(
+    function test_approveWithSignature_success_eoaSignature(
         uint128 ownerPk,
         address spender,
         address token,
@@ -257,22 +255,18 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start > 0);
         vm.assume(start < end);
         vm.assume(period > 0);
         vm.assume(allowance > 0);
         vm.assume(ownerPk != 0);
-        // generate the counterfactual address for the account
+        // Sign directly with a fresh EOA.
         address ownerAddress = vm.addr(ownerPk);
-        bytes[] memory owners = new bytes[](1);
-        owners[0] = abi.encode(ownerAddress);
-        address counterfactualAccount = mockCoinbaseSmartWalletFactory.getAddress(owners, 0);
 
-        // create a 6492-compliant signature for the spend permission
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: counterfactualAccount,
+            account: ownerAddress,
             spender: spender,
             token: token,
             start: start,
@@ -282,15 +276,12 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             salt: salt,
             extraData: extraData
         });
-        bytes memory signature = _signSpendPermission6492(spendPermission, ownerPk, 0, owners);
-        // verify that the account isn't deployed yet
-        vm.assertEq(counterfactualAccount.code.length, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
 
         // submit the spend permission with the signature, see permit succeed
         mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
 
-        // verify that the account is now deployed (has code) and that a call to isValidSignature returns true
-        vm.assertGt(counterfactualAccount.code.length, 0);
+        vm.assertEq(ownerAddress.code.length, 0);
         vm.assertTrue(mockSpendPermissionManager.isValid(spendPermission));
     }
 
@@ -305,7 +296,7 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
         bytes memory extraData
     ) public {
         vm.assume(spender != address(0));
-        assumeNotPrecompile(token);
+        _assumeERC20Address(token);
         vm.assume(token != address(0));
         vm.assume(start < end);
         vm.assume(period > 0);
@@ -323,11 +314,10 @@ contract ApproveWithSignatureTest is SpendPermissionManagerBase {
             extraData: extraData
         });
 
-        bytes memory signature = _signSpendPermission(spendPermission, ownerPk, 0);
+        bytes memory signature = _signSpendPermission({spendPermission: spendPermission, signerPk: ownerPk});
         vm.expectEmit(address(mockSpendPermissionManager));
         emit SpendPermissionManager.SpendPermissionApproved({
-            hash: mockSpendPermissionManager.getHash(spendPermission),
-            spendPermission: spendPermission
+            hash: mockSpendPermissionManager.getHash(spendPermission), spendPermission: spendPermission
         });
         mockSpendPermissionManager.approveWithSignature(spendPermission, signature);
     }

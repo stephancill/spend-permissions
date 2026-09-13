@@ -9,6 +9,10 @@ out/
 
 # Dotenv file
 .env
+.env.local
+.env.*.local
+node_modules/
+third-party/
 
 # macOS
 .DS_Store

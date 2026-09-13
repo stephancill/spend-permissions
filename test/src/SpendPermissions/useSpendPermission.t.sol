@@ -27,12 +27,12 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         vm.assume(period > 0);
         vm.assume(allowance > 0);
         vm.assume(spend > 0); // spend of 0 would be caught as unauthorized in permit version of `spend`, caller of
-            // `useSpendPermission`
+        // `useSpendPermission`
 
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -63,11 +63,11 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         vm.assume(allowance > 0);
 
         uint256 spend = uint256(type(uint160).max) + 1; // spend as a fuzz param with assumption spend > type(160).max
-            // rejects too many inputs
+        // rejects too many inputs
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -105,7 +105,7 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -149,7 +149,7 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -195,7 +195,7 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         vm.assume(spend > 0);
         vm.assume(spend < spendPermission.allowance);
 
-        spendPermission.token = NATIVE_TOKEN;
+        spendPermission.token = TOKEN;
 
         vm.prank(spendPermission.account);
         mockSpendPermissionManager.approve(spendPermission);
@@ -205,7 +205,7 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
             hash: mockSpendPermissionManager.getHash(spendPermission),
             account: spendPermission.account,
             spender: spendPermission.spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             periodSpend: SpendPermissionManager.PeriodSpend({
                 start: spendPermission.start,
                 end: _safeAddUint48(spendPermission.start, spendPermission.period, spendPermission.end),
@@ -238,7 +238,7 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -277,7 +277,7 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -320,7 +320,7 @@ contract UseSpendPermissionTest is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: account,
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,

@@ -8,8 +8,6 @@ import {SpendPermissionManagerBase} from "../../base/SpendPermissionManagerBase.
 contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
     function setUp() public {
         _initializeSpendPermissionManager();
-        vm.prank(owner);
-        account.addOwnerAddress(address(mockSpendPermissionManager));
     }
 
     function test_getLastUpdatedPeriod_success_noSpend(
@@ -33,7 +31,7 @@ contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -75,7 +73,7 @@ contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -83,7 +81,7 @@ contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
             salt: salt,
             extraData: extraData
         });
-        vm.deal(address(account), spendPermission.allowance);
+        deal(TOKEN, address(account), spendPermission.allowance);
         vm.prank(address(account));
         mockSpendPermissionManager.approve(spendPermission);
         vm.warp(start);
@@ -121,7 +119,7 @@ contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -129,7 +127,7 @@ contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
             salt: salt,
             extraData: extraData
         });
-        vm.deal(address(account), spendPermission.allowance);
+        deal(TOKEN, address(account), spendPermission.allowance);
         vm.prank(address(account));
         mockSpendPermissionManager.approve(spendPermission);
         vm.warp(start);
@@ -169,7 +167,7 @@ contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
         SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
             account: address(account),
             spender: spender,
-            token: NATIVE_TOKEN,
+            token: TOKEN,
             start: start,
             end: end,
             period: period,
@@ -177,7 +175,7 @@ contract GetLastUpdatedPeriod is SpendPermissionManagerBase {
             salt: salt,
             extraData: extraData
         });
-        vm.deal(address(account), spendPermission.allowance);
+        deal(TOKEN, address(account), spendPermission.allowance);
         vm.prank(address(account));
         mockSpendPermissionManager.approve(spendPermission);
         vm.warp(start);

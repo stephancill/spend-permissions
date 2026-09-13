@@ -81,21 +81,20 @@ contract GetHashTest is SpendPermissionManagerBase {
         uint256 salt,
         bytes memory extraData
     ) public {
-        SpendPermissionManager.SpendPermission memory spendPermission = SpendPermissionManager.SpendPermission({
-            account: account,
-            spender: spender,
-            token: token,
-            start: start,
-            end: end,
-            period: period,
-            allowance: allowance,
-            salt: salt,
-            extraData: extraData
-        });
-        MockSpendPermissionManager mockSpendPermissionManager1 =
-            new MockSpendPermissionManager(publicERC6492Validator, address(magicSpend));
-        MockSpendPermissionManager mockSpendPermissionManager2 =
-            new MockSpendPermissionManager(publicERC6492Validator, address(magicSpend));
+        SpendPermissionManager.SpendPermission memory spendPermission =
+            SpendPermissionManager.SpendPermission({
+                account: account,
+                spender: spender,
+                token: token,
+                start: start,
+                end: end,
+                period: period,
+                allowance: allowance,
+                salt: salt,
+                extraData: extraData
+            });
+        MockSpendPermissionManager mockSpendPermissionManager1 = new MockSpendPermissionManager();
+        MockSpendPermissionManager mockSpendPermissionManager2 = new MockSpendPermissionManager();
         bytes32 hash1 = mockSpendPermissionManager1.getHash(spendPermission);
         bytes32 hash2 = mockSpendPermissionManager2.getHash(spendPermission);
         assertNotEq(hash1, hash2);
