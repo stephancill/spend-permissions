@@ -18,6 +18,12 @@ Based on Coinbase Spend Permissions revision `e0004e63edc4e17de7aa978293800ac7a1
 - The viem example includes Zod-validated single and batch typed-data builders. Its isolated Anvil flow compares both hashes against the contract and uses a uniquely named OpenZeppelin-based mock token to avoid upstream `MockERC20` artifact name collisions.
 - CI runs Solidity formatting, build and fuzz tests, plus Bun lint, formatting, type checking, and the localhost integration.
 
+## Deployments
+
+The manager is deployed deterministically at `0x764159aa8a59b3fff39115c64a2b75c9c094ebe2` on Base Sepolia, Base, Arbitrum One, OP Mainnet, and Polygon. It uses the canonical CREATE2 deployment proxy with salt `0x00…00` and the `deploy`-profile init code (init code hash `0xb79235b56934c3da59a2658ee85b9a08ba2f8df43fc28f0b0e36eb1da01c8012`). Ethereum and BNB Chain remain pending gas funding. All five deployments are verified as exact matches on their explorers. See [deployments](deployments.md).
+
+Deployed runtime bytes match the reviewed build exactly outside of compiler-patched immutable slots, which embed the per-chain `address(this)` and derived EIP-712 domain separator. This is expected for deterministic deployments.
+
 ## Verification
 
 - `forge fmt` and `forge build --sizes`: pass; the default optimized manager runtime is 9,092 bytes.

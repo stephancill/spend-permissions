@@ -101,7 +101,15 @@ Reusable typed-data builders, input schemas, and an ABI are in [`examples/permis
 
 ## Deployment and upstream compatibility
 
-The sole production contract is [`src/SpendPermissionManager.sol`](src/SpendPermissionManager.sol). It has no constructor arguments, owner, proxy, or external validator deployment. No public deployment addresses are published yet. Use the `deploy` Foundry profile to build production verification artifacts.
+The sole production contract is [`src/SpendPermissionManager.sol`](src/SpendPermissionManager.sol). It has no constructor arguments, owner, proxy, or external validator deployment.
+
+It is deployed at the same address on every chain through the canonical CREATE2 deployment proxy:
+
+```text
+0x764159aa8a59b3fff39115c64a2b75c9c094ebe2
+```
+
+Live and verified on Base, Base Sepolia, Arbitrum One, OP Mainnet, and Polygon. Ethereum and BNB Chain are pending gas funding. See [deployments](docs/deployments.md) for transactions, verification links, and the reproducible CREATE2 parameters.
 
 This fork changes the execution model and EIP-712 domain. Coinbase's existing token approvals, signatures, deployment addresses, smart-wallet ownership setup, MagicSpend flows, and router are not compatible with it.
 
